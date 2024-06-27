@@ -9,6 +9,7 @@ import (
 	"go/types"
 	"log"
 	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 )
@@ -33,6 +34,8 @@ func goTypeToTSType(goType types.Type) string {
 			return "number"
 		case types.String:
 			return "string"
+		default:
+			return "any"
 		}
 	case *types.Struct:
 		switch name {
@@ -70,13 +73,32 @@ func generateTSInterface(name string, t *types.Struct) string {
 	return sb.String()
 }
 
+// 递归解析目录中的所有Go文件
+func parseDirRecursive(fset *token.FileSet, path string) (map[string][]*ast.File, error) {
+	filesByPkg := make(map[string][]*ast.File)
+	err := filepath.Walk(path, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if info.IsDir() {
+			return nil
+		}
+		if strings.HasSuffix(path, ".go") {
+			file, err := parser.ParseFile(fset, path, nil, parser.AllErrors)
+			if err != nil {
+				return err
+			}
+			pkgName := file.Name.Name
+			filesByPkg[pkgName] = append(filesByPkg[pkgName], file)
+		}
+		return nil
+	})
+	return filesByPkg, err
+}
+
 // 解析整个项目并生成TypeScript接口定义
 func parseProject(path string) (string, error) {
 	fset := token.NewFileSet()
-	pkgs, err := parser.ParseDir(fset, path, nil, parser.AllErrors)
-	if err != nil {
-		return "", err
-	}
 
 	conf := types.Config{Importer: importer.Default()}
 	info := &types.Info{
@@ -85,26 +107,29 @@ func parseProject(path string) (string, error) {
 		Uses:  make(map[*ast.Ident]types.Object),
 	}
 
+	filesByPkg, err := parseDirRecursive(fset, path)
+	if err != nil {
+		return "", err
+	}
+	if len(filesByPkg) == 0 {
+		return "", fmt.Errorf("no files found")
+	}
+
+	// 类型检查所有文件
+	for pkgName, files := range filesByPkg {
+		pkg := types.NewPackage(path, pkgName)
+		check := types.NewChecker(&conf, fset, pkg, info)
+		if err := check.Files(files); err != nil {
+			return "", err
+		}
+	}
+
 	var tsInterfaces []string
 
-	for _, pkg := range pkgs {
-		for p, file := range pkg.Files {
-			astFile, err := parser.ParseFile(fset, p, nil, parser.AllErrors)
-			if err != nil {
-				return "", err
-			}
-
-			check := types.NewChecker(&conf, fset, types.NewPackage(path, file.Name.Name), info)
-			if err := check.Files([]*ast.File{astFile}); err != nil {
-				return "", err
-			}
-
-			for ident, obj := range info.Defs {
-				if obj, ok := obj.(*types.TypeName); ok {
-					if structType, ok := obj.Type().Underlying().(*types.Struct); ok {
-						tsInterfaces = append(tsInterfaces, generateTSInterface(ident.Name, structType))
-					}
-				}
+	for ident, obj := range info.Defs {
+		if obj, ok := obj.(*types.TypeName); ok {
+			if structType, ok := obj.Type().Underlying().(*types.Struct); ok {
+				tsInterfaces = append(tsInterfaces, generateTSInterface(ident.Name, structType))
 			}
 		}
 	}
@@ -113,7 +138,7 @@ func parseProject(path string) (string, error) {
 }
 
 func writeResultToTSFile(result string) error {
-	tsFilePath := "/Users/akino/Desktop/Github/go2ts/example/ts-results/converted.d.ts"
+	tsFilePath := "./example/ts-results/converted.d.ts"
 
 	file, err := os.Create(tsFilePath)
 	if err != nil {
@@ -136,7 +161,7 @@ func main() {
 	//    log.Fatalf("Usage: %s <path>", os.Args[0])
 	//}
 
-	path := "/Users/akino/Desktop/Github/go2ts/example"
+	path := "./"
 
 	result, err := parseProject(path)
 	if err != nil {
