@@ -12,8 +12,7 @@ import (
 )
 
 // ParseDirRecursive 递归解析目录中的所有Go文件
-func ParseDirRecursive(fset *token.FileSet, path string) (map[string]string, []*ast.File, map[string][]*ast.File, error) {
-	allFiles := make([]*ast.File, 0)
+func ParseDirRecursive(fset *token.FileSet, path string) (map[string]string, map[string][]*ast.File, error) {
 	filesByPkg := make(map[string][]*ast.File)
 	pkgPathByPkg := make(map[string]string)
 	err := filepath.Walk(path, func(path string, info os.FileInfo, err error) error {
@@ -28,7 +27,6 @@ func ParseDirRecursive(fset *token.FileSet, path string) (map[string]string, []*
 			if err != nil {
 				return err
 			}
-			allFiles = append(allFiles, file)
 			pkgName := file.Name.Name
 			filesByPkg[pkgName] = append(filesByPkg[pkgName], file)
 			if pkgPathByPkg[pkgName] == "" {
@@ -37,7 +35,7 @@ func ParseDirRecursive(fset *token.FileSet, path string) (map[string]string, []*
 		}
 		return nil
 	})
-	return pkgPathByPkg, allFiles, filesByPkg, err
+	return pkgPathByPkg, filesByPkg, err
 }
 
 // ParseProject 解析整个项目并生成TypeScript接口定义
@@ -51,7 +49,7 @@ func ParseProject(path string) (string, error) {
 		Uses:  make(map[*ast.Ident]types.Object),
 	}
 
-	_, allFiles, filesByPkg, err := ParseDirRecursive(fset, path)
+	_, filesByPkg, err := ParseDirRecursive(fset, path)
 	if err != nil {
 		return "", err
 	}
@@ -60,14 +58,14 @@ func ParseProject(path string) (string, error) {
 	}
 
 	// 类型检查所有文件
-	//for _, files := range filesByPkg {
-	//pkg := types.NewPackage(pkgPatyPkg[pkgName], pkgName)
-	//check := types.NewChecker(&conf, fset, pkg, info)
-	if _, err := conf.Check(path, fset, allFiles, info); err != nil {
-		fmt.Println(11, err)
-		return "", err
+	for _, files := range filesByPkg {
+		//pkg := types.NewPackage(pkgPatyPkg[pkgName], pkgName)
+		//check := types.NewChecker(&conf, fset, pkg, info)
+		if _, err := conf.Check(path, fset, files, info); err != nil {
+			fmt.Println(11, err)
+			return "", err
+		}
 	}
-	//}
 
 	var tsInterfaces []string
 
