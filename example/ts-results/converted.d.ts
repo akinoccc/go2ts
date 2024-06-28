@@ -1,3 +1,20 @@
+interface DemoStruct2 {
+  test1: string;
+  test2: number;
+}
+
+interface DemoStruct4 {
+  Name: string;
+  Age: number;
+  Test: number;
+}
+
+interface DemoStruct3 {
+  Name: string;
+  Age: number;
+  Test: DemoStruct;
+}
+
 interface DemoStruct {
   id_1: number;
   id_2: number;
@@ -17,21 +34,4 @@ interface DemoStruct {
   updatedBy: number;
   deletedBy: number;
   test: DemoStruct2;
-}
-
-interface DemoStruct3 {
-  Name: string;
-  Age: number;
-  Test: DemoStruct;
-}
-
-interface DemoStruct2 {
-  test1: string;
-  test2: number;
-}
-
-interface DemoStruct4 {
-  Name: string;
-  Age: number;
-  Test: number;
 }

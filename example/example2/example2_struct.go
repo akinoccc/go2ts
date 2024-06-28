@@ -1,6 +1,6 @@
 package example2
 
-import "go2ts/example"
+import "example"
 
 type DemoStruct4 struct {
 	Name string
